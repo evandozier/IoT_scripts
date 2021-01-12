@@ -15,6 +15,7 @@ import requests
 from bs4 import BeautifulSoup
 import time
 import smtplib
+from selenium import webdriver
 
 _moduleLogger = logging.getLogger(__name__)
 
@@ -25,6 +26,21 @@ def _parse_args(argv):
 
     # Setup parser.
     inputGroup = parser.add_argument_group("Input")
+    inputGroup.add_argument(
+        "--sender_email",
+        required=True,
+        help="E-mail address used to send the e-mail.",
+    )
+    inputGroup.add_argument(
+        "--sender_email_password",
+        required=True,
+        help="Password for e-mail address.",
+    )
+    inputGroup.add_argument(
+        "--recipient_email",
+        required=True,
+        help="Recipient e-mail address to receive the alert.",
+    )
     inputGroup.add_argument(
         "--url",
         required=False, default="https://vaccine.heb.com/",
@@ -92,19 +108,24 @@ def _main(argv):
     url = args.url
     _moduleLogger.info("Checking URL: %s", url)    
 
-    headers = {'User-Agent': 'Mozilla/5.0 (Macintosh; Intel Mac OS X 10_10_1) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/39.0.2171.95 Safari/537.36'}
-    response = requests.get(url, headers=headers)
-    original_soup = BeautifulSoup(response.text, "lxml")
+    # Required because HEB uses some dynamic javascript to display the page, so without simulating a client, I see nothing.
+    # This still doesn't work yet. I can't really see the actual information that is human-readable yet.
+    driver = webdriver.Firefox()
+    driver.get(url)
+    # time.sleep(5)
+    source = driver.page_source
+    driver.quit()
+ 
+    original_soup = BeautifulSoup(source, "lxml")
     _moduleLogger.info(original_soup)
 
     # Loop on website and look for changes
     while True:
-        # set the headers like we are a browser,
-        headers = {'User-Agent': 'Mozilla/5.0 (Macintosh; Intel Mac OS X 10_10_1) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/39.0.2171.95 Safari/537.36'}
-        # download the homepage
-        response = requests.get(url, headers=headers)
-        # parse the downloaded homepage and grab all text, then,
-        soup = BeautifulSoup(response.text, "lxml")
+        driver = webdriver.Firefox()
+        driver.get(url)
+        source = driver.page_source
+        driver.quit()
+        soup = BeautifulSoup(source, "lxml")
     
         # Compare initial snapshot of page to current snapshot. Continue if identical
         if soup == original_soup:
@@ -114,16 +135,20 @@ def _main(argv):
         
         # If site is different than initial, e-mail me
         else:
+            # Notify what changed
+            _moduleLogger.info("Original: %s", original_soup.str())
+            _moduleLogger.info("Latest: %s", soup.str())
+
             # create an email message with just a subject line,
-            msg = 'Subject: This is Chris\'s script talking, CHECK GOOGLE!'
-            fromaddr = 'YOUR_EMAIL_ADDRESS'
-            toaddrs  = ['AN_EMAIL_ADDRESS','A_SECOND_EMAIL_ADDRESS', 'A_THIRD_EMAIL_ADDRESS']
+            msg = 'Subject: HEB Website Updated!'
+            fromaddr = args.sender_email
+            toaddrs  = [args.recipient_email]
         
             # setup the email server,
-            # server = smtplib.SMTP('smtp.gmail.com', 587)
-            # server.starttls()
+            server = smtplib.SMTP('smtp.gmail.com', 587)
+            server.starttls()
             # add my account login name and password,
-            # server.login("YOUR_EMAIL_ADDRESS", "YOUR_PASSWORD")
+            server.login(args.sender_email, args.sender_email_password)
         
             # Print the email's contents
             _moduleLogger.info('From: ' + fromaddr)
@@ -131,9 +156,9 @@ def _main(argv):
             _moduleLogger.info('Message: ' + msg)
         
             # send the email
-            # server.sendmail(fromaddr, toaddrs, msg)
+            server.sendmail(fromaddr, toaddrs, msg)
             # disconnect from the server
-            # server.quit()
+            server.quit()
             break
         
         return 0
