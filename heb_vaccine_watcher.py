@@ -16,6 +16,10 @@ from bs4 import BeautifulSoup
 import time
 import smtplib
 from selenium import webdriver
+from selenium.webdriver.chrome.options import Options
+from selenium.webdriver.common.keys import Keys
+import os
+
 
 _moduleLogger = logging.getLogger(__name__)
 
@@ -110,24 +114,36 @@ def _main(argv):
 
     # Required because HEB uses some dynamic javascript to display the page, so without simulating a client, I see nothing.
     # This still doesn't work yet. I can't really see the actual information that is human-readable yet.
-    driver = webdriver.Firefox()
-    driver.get(url)
-    time.sleep(5)
-    source = driver.page_source
-    driver.quit()
- 
-    original_soup = BeautifulSoup(source, "lxml")
-    _moduleLogger.info(original_soup)
+    chrome_options = Options()
+    chrome_options.add_argument("--headless")
+    chrome_options.add_argument("--window-size=1024x1400")
 
+    first_loop = True
+    original_soup = ''
     # Loop on website and look for changes
     while True:
-        driver = webdriver.Firefox()
+        driver = webdriver.Chrome(chrome_options=chrome_options)
         driver.get(url)
+        # Give page time to load
         time.sleep(5)
+        main_iframe = driver.find_element_by_tag_name("iframe")
+        _moduleLogger.debug(main_iframe)
+        driver.switch_to_frame(main_iframe)
         source = driver.page_source
         driver.quit()
+        
         soup = BeautifulSoup(source, "lxml")
-    
+        
+        _moduleLogger.info("Looping...")
+        _moduleLogger.info(original_soup)
+
+        # On first loop, define template for future matches
+        if first_loop:
+            first_loop = False
+            original_soup = BeautifulSoup(source, "lxml")
+            _moduleLogger.debug(original_soup)
+            continue
+        
         # Compare initial snapshot of page to current snapshot. Continue if identical
         if soup == original_soup:
             _moduleLogger.info("Website content identical")
@@ -137,10 +153,10 @@ def _main(argv):
         # If site is different than initial, e-mail me
         else:
             # Notify what changed
-            _moduleLogger.info("Original: ")
-            _moduleLogger.info(original_soup)
-            _moduleLogger.info("Latest: ")
-            _moduleLogger.info(soup)
+            _moduleLogger.debug("Original:")
+            _moduleLogger.debug(original_soup)
+            _moduleLogger.debug("Latest:")
+            _moduleLogger.debug(soup)
 
             # create an email message with just a subject line,
             msg = 'Subject: HEB Website Updated!'
@@ -164,7 +180,7 @@ def _main(argv):
             server.quit()
             break
         
-        return 0
+    return 0
 
 if __name__ == "__main__":
     import sys
