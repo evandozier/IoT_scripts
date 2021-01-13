@@ -1,13 +1,12 @@
 #!/usr/bin/env python3
 '''
-ercot_realtime_price.py is a script that will monitor the ercot
-    realtime pricing table here: http://www.ercot.com/content/cdr/html/real_time_spp
-    and make some decisions off of the value.
-    This script monitors the 'LZ_SOUTH' column of that table since that's where my
-    cost comes from. Change that as appropriate
-    Change the private_webhook_key to whatever your key is to setup the IFTT events.
-    I have my webhook triggering my ecobee to go into away mode when the price is high
-    and resuming when the price falls back below the threshold.
+heb_vaccine_watch.py is a script that monitors the heb vaccine website
+    and looks for a key phrase (default is "We are currently out of vaccine
+    allocation to schedule new appointments. Please check back."). It assumes
+    that once that key phrase is no longer present, that the website has been
+    updated with sign-up times and it sends an e-mail to notify.
+    It requires selenium and chromedriver to be installed and for chromedriver
+    to be added to PATH.
 '''
 
 import logging
@@ -52,8 +51,13 @@ def _parse_args(argv):
     )
     inputGroup.add_argument(
         "--check_period",
-        required=False, default=30,
+        required=False, default=60,
         help="Period of time to wait between checks (seconds).",
+    )
+    inputGroup.add_argument(
+        "--search_phrase",
+        required=False, default="We are currently out of vaccine allocation to schedule new appointments. Please check back.",
+        help="Key phrase to search iframe for. Pick a message that you think is important to detect absence of.",
     )
     debugGroup = parser.add_argument_group("Debug")
     debugGroup.add_argument(
@@ -106,11 +110,8 @@ def _main(argv):
         print(doctest.testmod())
         sys.exit(0)
 
-    # Initialize variables and prepare to loop
-    check_period = args.check_period
-
-    url = args.url
-    _moduleLogger.info("Checking URL: %s", url)    
+    _moduleLogger.info("Checking URL: %s", args.url)    
+    _moduleLogger.info("Search for keyphrase: %s", args.search_phrase)
 
     # Required because HEB uses some dynamic javascript to display the page, so without simulating a client, I see nothing.
     # This still doesn't work yet. I can't really see the actual information that is human-readable yet.
@@ -118,12 +119,10 @@ def _main(argv):
     chrome_options.add_argument("--headless")
     chrome_options.add_argument("--window-size=1024x1400")
 
-    first_loop = True
-    original_soup = ''
     # Loop on website and look for changes
     while True:
         driver = webdriver.Chrome(chrome_options=chrome_options)
-        driver.get(url)
+        driver.get(args.url)
         # Give page time to load
         time.sleep(5)
         main_iframe = driver.find_element_by_tag_name("iframe")
@@ -133,33 +132,21 @@ def _main(argv):
         driver.quit()
         
         soup = BeautifulSoup(source, "lxml")
-        
-        _moduleLogger.info("Looping...")
-        _moduleLogger.info(original_soup)
+        results = soup.body.find_all(string=args.search_phrase)
+        _moduleLogger.debug("Results: %s", str(results))
 
-        # On first loop, define template for future matches
-        if first_loop:
-            first_loop = False
-            original_soup = BeautifulSoup(source, "lxml")
-            _moduleLogger.debug(original_soup)
+        # Look for phrase in main iframe. Continue if found
+        # For the default phrase, it's found 3 times on the page, lets alert if that count changes at all
+        if len(results) > 3:
+            _moduleLogger.info("Phrase found, continuing to loop")
+            time.sleep(args.check_period)
             continue
         
-        # Compare initial snapshot of page to current snapshot. Continue if identical
-        if soup == original_soup:
-            _moduleLogger.info("Website content identical")
-            time.sleep(check_period)
-            continue
-        
-        # If site is different than initial, e-mail me
+        # If phrase not found, e-mail me
         else:
-            # Notify what changed
-            _moduleLogger.debug("Original:")
-            _moduleLogger.debug(original_soup)
-            _moduleLogger.debug("Latest:")
-            _moduleLogger.debug(soup)
 
             # create an email message with just a subject line,
-            msg = 'Subject: HEB Website Updated!'
+            msg = 'Subject: HEB COVID Vaccine Website has been updated! Go to https://vaccine.heb.com/ and sign up!'
             fromaddr = args.sender_email
             toaddrs  = [args.recipient_email]
         
