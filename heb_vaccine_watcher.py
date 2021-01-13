@@ -114,7 +114,6 @@ def _main(argv):
     _moduleLogger.info("Search for keyphrase: %s", args.search_phrase)
 
     # Required because HEB uses some dynamic javascript to display the page, so without simulating a client, I see nothing.
-    # This still doesn't work yet. I can't really see the actual information that is human-readable yet.
     chrome_options = Options()
     chrome_options.add_argument("--headless")
     chrome_options.add_argument("--window-size=1024x1400")
