@@ -112,7 +112,7 @@ def _main(argv):
     # This still doesn't work yet. I can't really see the actual information that is human-readable yet.
     driver = webdriver.Firefox()
     driver.get(url)
-    # time.sleep(5)
+    time.sleep(5)
     source = driver.page_source
     driver.quit()
  
@@ -123,6 +123,7 @@ def _main(argv):
     while True:
         driver = webdriver.Firefox()
         driver.get(url)
+        time.sleep(5)
         source = driver.page_source
         driver.quit()
         soup = BeautifulSoup(source, "lxml")
@@ -136,8 +137,10 @@ def _main(argv):
         # If site is different than initial, e-mail me
         else:
             # Notify what changed
-            _moduleLogger.info("Original: %s", original_soup.str())
-            _moduleLogger.info("Latest: %s", soup.str())
+            _moduleLogger.info("Original: ")
+            _moduleLogger.info(original_soup)
+            _moduleLogger.info("Latest: ")
+            _moduleLogger.info(soup)
 
             # create an email message with just a subject line,
             msg = 'Subject: HEB Website Updated!'
