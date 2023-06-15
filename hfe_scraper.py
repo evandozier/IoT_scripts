@@ -85,7 +85,7 @@ def get_links(visited_links, download_links, URL):
 
     #print("Print Soup\\n\\n\\n", soup)
     for link in soup.find_all('a'):
-        if base_url in link['href'] and link['href'] not in visited_links:
+        if link['href'] and base_url in link['href'] and link['href'] not in visited_links:
             _moduleLogger.info("Parsing: %s", link['href'])
             # Sleep so we don't hurt the website
             time.sleep(2)
