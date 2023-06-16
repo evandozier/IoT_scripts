@@ -17,6 +17,8 @@ _moduleLogger = logging.getLogger(__name__)
 headers = {'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64; rv:109.0) Gecko/20100101 Firefox/113.0'}
 base_url = "https://www.hifiengine.com/manual_library/marantz"
 download_link_root = "https://www.hifiengine.com/hfe_downloads/index.php"
+
+
 def _parse_args(argv):
     import argparse
     parser = argparse.ArgumentParser()
@@ -79,21 +81,27 @@ def _parse_args(argv):
     return args, loggingLevel
 
 
-def get_links(visited_links, download_links, URL):
-    page = requests.get(URL, headers=headers)
+def get_links(url, visited_links=None, download_links=None):
+    if visited_links is None:
+        visited_links = []
+    if download_links is None:
+        matches = []
+    
+    page = requests.get(url, headers=headers)
     soup = BeautifulSoup(page.content, "html.parser")
 
     #print("Print Soup\\n\\n\\n", soup)
     for link in soup.find_all('a'):
-        if link['href'] and base_url in link['href'] and link['href'] not in visited_links:
-            _moduleLogger.info("Parsing: %s", link['href'])
+        href = link['href']
+        if href and base_url in href and href not in visited_links:
+            _moduleLogger.info("Parsing: %s", href)
             # Sleep so we don't hurt the website
             time.sleep(2)
-            visited_links.append(link['href'])
-            visited_links, download_links = get_links(visited_links, download_links, link['href'])
-        elif download_link_root in link['href']:
-            _moduleLogger.info("Found download link: %s", link['href'])
-            download_links.append(link['href'])
+            visited_links.append(href)
+            visited_links, download_links = get_links(visited_links, download_links, href)
+        elif download_link_root in href:
+            _moduleLogger.info("Found download link: %s", href)
+            download_links.append(href)
 
     return visited_links, download_links
 
@@ -111,10 +119,9 @@ def _main(argv):
 
     _moduleLogger.info("Checking URL: %s", args.url)
 
-    URL = args.url
-    download_links = []
-    visited_links = [URL]
-    download_links = get_links(visited_links, download_links, URL)
+    url = args.url
+
+    visited_links, download_links = get_links(url)
     #print(links)
     with open('download_links.log', mode='wt', encoding='utf-8') as f:
         f.write("\n".join(str(item) for item in download_links))
