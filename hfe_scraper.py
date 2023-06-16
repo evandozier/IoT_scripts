@@ -44,7 +44,7 @@ def _parse_args(argv):
     debugGroup = parser.add_argument_group("Debug")
     debugGroup.add_argument(
         "-v", "--verbose",
-        action="count", dest="verbosity", default=0,
+        action="count", dest="verbosity", default=1,
         help="Turn on verbose output. (Useful if you really care to see what \
                 the tool is doing at all times.)"
     )
@@ -81,27 +81,27 @@ def _parse_args(argv):
     return args, loggingLevel
 
 
-def get_links(url, visited_links=None, download_links=None):
+def get_links(url, visited_links=None, download_links=None, depth=0):
     if visited_links is None:
-        visited_links = []
+        visited_links = set()
     if download_links is None:
-        matches = []
+        download_links = []
     
     page = requests.get(url, headers=headers)
     soup = BeautifulSoup(page.content, "html.parser")
-
-    #print("Print Soup\\n\\n\\n", soup)
-    for link in soup.find_all('a'):
+    depth += 1
+    for link in soup.find_all('a', href=True):
         href = link['href']
-        if href and base_url in href and href not in visited_links:
-            _moduleLogger.info("Parsing: %s", href)
+        if base_url in href and href not in visited_links:
+            _moduleLogger.info("Current Depth: %d - Parsing: %s at", depth, href)
             # Sleep so we don't hurt the website
             time.sleep(2)
-            visited_links.append(href)
-            visited_links, download_links = get_links(visited_links, download_links, href)
+            visited_links.add(href)
+            visited_links, download_links = get_links(href, visited_links, download_links, depth)
         elif download_link_root in href:
-            _moduleLogger.info("Found download link: %s", href)
-            download_links.append(href)
+            if href in download_links:
+                _moduleLogger.info("Found download link: %s", href)
+                download_links.append(href)
 
     return visited_links, download_links
 
@@ -117,7 +117,7 @@ def _main(argv):
         print(doctest.testmod())
         sys.exit(0)
 
-    _moduleLogger.info("Checking URL: %s", args.url)
+    _moduleLogger.info("Checking Initial URL: %s", args.url)
 
     url = args.url
 
